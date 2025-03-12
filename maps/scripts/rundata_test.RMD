@@ -1,0 +1,155 @@
+---
+title: "runtest"
+output: word_document
+date: "2025-02-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages}
+pacman::p_load(
+  tidyverse,
+  readxl,
+  readr,
+  sf,
+  usmap,
+  tigris
+)
+
+```
+
+```{r load run data}
+
+rundata <- jsonlite::read_json("C:/Users/shelb/Documents/shelbykottkeweaver@gmail.com_0_summarizedActivities.json",
+                                 simplifyVector = TRUE)
+
+rundata <- rundata[[1]][[1]]
+
+rundata <- as_tibble(rundata) %>% 
+  select(activityId, name, activityType, sportType, avgHr, maxHr, minHr, steps, calories, contains("Longitude"),
+         contains("Latitude")) %>% 
+  filter(activityType == "running") 
+
+# turn run data into an sf object
+rundata_sf <- st_as_sf(rundata, coords = c("startLongitude", "startLatitude"), crs = "NAD83")#, crs = 4326)
+
+```
+
+```{r get map data using tigris}
+all_states <- state.abb
+options(tigris_class = "sf")
+
+# get all US states - using TIGRIS
+usa_df <- states(cb = TRUE) |> 
+  filter(STUSPS %in% all_states)
+
+# using usmap - this doesn't work
+#usa_df <- st_as_sf(us_map("states"), crs = "NAD83")
+
+# make sure we have everything
+ggplot(usa_df) +
+  geom_sf()
+
+
+```
+
+```{r merge with run data}
+final_mapdata <- st_join(rundata_sf, usa_df)
+
+```
+
+
+```{r}
+# separate out the longtitude and latitude so we can transform it
+final_mapdata <- final_mapdata %>%
+    mutate(longitude = unlist(map(final_mapdata$geometry,1)),
+           latitude = unlist(map(final_mapdata$geometry,2)))
+
+# filter out alaska and hawaii - we need to transform them
+shortened_mapdata <- final_mapdata |> 
+  filter(!(STATEFP %in% c("02", "15")))
+
+# transform the alaska data so it shows at the bottom of the map
+alaska_df <- final_mapdata |> 
+  filter(STATEFP == "02")
+
+# adjustment for alaska
+alaska_scale <- 0.35
+alaska_x_offset <- 0.095
+alaska_y_offset <- 0.150
+
+all_alaska_sf <- alaska_df |>
+  mutate(longitude = longitude * alaska_scale + alaska_x_offset,
+         latitude = latitude * alaska_scale + alaska_y_offset)
+
+all_alaska_sf <- all_alaska_sf %>%
+  st_as_sf(coords = c("longitude", "latitude"))
+
+# adjustment for hawaii
+
+all_objects_sf <- rbind(shortened_mapdata, all_alaska_sf)
+
+
+```
+
+
+```{r map it}
+ggplot(all_objects_sf) +
+  geom_sf() 
+
+```
+
+
+```{r}
+US <- st_as_sf(maps::map("usa", plot = FALSE, fill = TRUE))#, crs = 4326)
+
+# Adjust the map data for Alaska and Hawaii
+adjusted_states_map <- adjust_map(US)
+
+
+sfc <- st_as_sf(run_data, coords = c("startLongitude", "startLatitude"), crs = 4326)
+
+#.. and perform a spatial join!
+st_join(sfc, US)
+
+plot_usmap()+
+  geom_sf(data = my_sf, aes(color = name))+
+  theme(legend.position="none")
+
+# test
+my_sf <- st_as_sf(rundata, coords = c("startLongitude", "startLatitude"),
+                  crs = 4326)
+
+#Plot it:
+
+ggplot(my_sf) + 
+  geom_sf(aes(color = name))
+
+```
+
+
+```{r}
+
+library(usmap)
+us_map <- map_data("state")
+
+ggplot() +
+  # Plot the map of the US
+  geom_map() +
+  #geom_polygon(data = us_map, aes(x = long, y = lat, group = group), fill = "lightblue", color = "black") +
+  # Plot the coordinates on top of the map
+  #geom_point(data = run_data, aes(x = startLongitude, y = startLatitude), color = "red", size = 3) +
+  # Add labels for the coordinates
+  #geom_text(data = coordinates, aes(x = lon, y = lat, label = city), hjust = -0.1, vjust = -0.1) +
+  # Set plot title and labels
+  labs(title = "Map of the United States with Coordinates", x = "Longitude", y = "Latitude") +
+  theme_minimal()
+
+```
+
+
+
+
+
