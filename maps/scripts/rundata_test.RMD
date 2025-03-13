@@ -15,15 +15,15 @@ pacman::p_load(
   readr,
   sf,
   usmap,
-  tigris
+  tigris,
+  here
 )
 
 ```
 
 ```{r load run data}
 
-rundata <- jsonlite::read_json("C:/Users/shelb/Documents/shelbykottkeweaver@gmail.com_0_summarizedActivities.json",
-                                 simplifyVector = TRUE)
+rundata <- jsonlite::read_json(here("data/shelbykottkeweaver@gmail.com_0_summarizedActivities.json"), simplifyVector = TRUE)
 
 rundata <- rundata[[1]][[1]]
 
@@ -39,10 +39,12 @@ rundata_sf <- st_as_sf(rundata, coords = c("startLongitude", "startLatitude"), c
 
 ```{r get map data using tigris}
 all_states <- state.abb
+
+all_states <- append(all_states, "DC")
 options(tigris_class = "sf")
 
 # get all US states - using TIGRIS
-usa_df <- states(cb = TRUE) |> 
+usa_df <- counties(cb = TRUE) |> 
   filter(STUSPS %in% all_states)
 
 # using usmap - this doesn't work
@@ -52,14 +54,25 @@ usa_df <- states(cb = TRUE) |>
 ggplot(usa_df) +
   geom_sf()
 
+limits = st_bbox(usa_df$geometry)
+limits
 
 ```
 
 ```{r merge with run data}
-final_mapdata <- st_join(rundata_sf, usa_df)
+# add county and state data
+final_mapdata <- st_join(rundata_sf, usa_df, left = TRUE) |> 
+  filter(!is.na(NAME))
 
+running_states <- unique(final_mapdata$NAME)
+
+# map it
+ggplot(usa_df) +
+  geom_sf(aes(fill = NAME)) +
+  geom_point(data = final_mapdata, aes(x = endLongitude, y = endLatitude, color = NAME))+
+  coord_sf(xlim = c(as.numeric(limits$xmin), as.numeric(-60)), 
+           ylim = c(as.numeric(limits$ymin), as.numeric(limits$ymax)))
 ```
-
 
 ```{r}
 # separate out the longtitude and latitude so we can transform it
@@ -96,8 +109,13 @@ all_objects_sf <- rbind(shortened_mapdata, all_alaska_sf)
 
 
 ```{r map it}
+limits = st_bbox(all_objects_sf$geometry)
+limits
+
 ggplot(all_objects_sf) +
-  geom_sf() 
+  geom_sf() +
+  coord_sf(xlim = c(as.numeric(limits$xmin),as.numeric(limits$xmax)), 
+           ylim = c(as.numeric(limits$ymin),as.numeric(limits$ymax)))
 
 ```
 

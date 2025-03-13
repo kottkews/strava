@@ -35,11 +35,13 @@ rundata <- as_tibble(rundata) |>
   mutate(beginTimestamp = as_datetime(beginTimestamp/1000)) |>
   select(activityId, name, activityType, sportType, avgHr, maxHr, minHr, steps, calories, contains("Longitude"),
        contains("Latitude")) |>
-  filter(activityType == "running")
+  filter(activityType == "running") |> 
+  as_tibble()
 
 
 ```
 
+Get coordinates from the tigris library to get the state 
 ```{r}
 
 ```
